@@ -47,16 +47,18 @@ pub trait ExecutorTokenCountExt: traits::Executor {
         base_parameters: &Parameters,
         chunk_overlap: Option<usize>,
     ) -> Result<Vec<Parameters>, PromptTokensError> {
+        log::info!("llm-chain split_to_fit ");
         let splitter = self
             .get_tokenizer(step.options())
             .map_err(|_e| PromptTokensError::UnableToCompute)?;
 
+        log::info!("llm-chain get_tokenizer ");
         let text = doc.get_text().ok_or(PromptTokensError::UnableToCompute)?;
 
         let prompt = step.format(&base_parameters.combine(&Parameters::new_with_text("")))?;
         let tokens_used = self.tokens_used(step.options(), &prompt)?;
         let chunk_overlap = chunk_overlap.unwrap_or(0);
-
+        log::info!("llm-chain split_params ");
         let split_params = splitter
             .split_text(
                 &text,
@@ -67,6 +69,7 @@ pub trait ExecutorTokenCountExt: traits::Executor {
             .into_iter()
             .map(Parameters::new_with_text)
             .collect();
+        log::info!("llm-chain finish ");
         Ok(split_params)
     }
 }
