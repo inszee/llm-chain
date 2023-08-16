@@ -1297,6 +1297,7 @@ dependencies = [
  "futures",
  "lazy_static",
  "llm-chain-macros",
+ "log",
  "markdown",
  "mockall",
  "paste",
