@@ -174,7 +174,7 @@ pub trait Tokenizer {
             1,
         );
 
-        log::info!("llm-chain split_text max_tokens_per_chunk = {},step = {}, tokens.len = {}",max_tokens_per_chunk,step_size,tokens.len());
+        log::info!("llm-chain split_text max_tokens_per_chunk = {},step ={}, tokens.len = {}",max_tokens_per_chunk,step_size,tokens.len());
         debug_assert_ne!(step_size, 0);
 
         (0..tokens.len())

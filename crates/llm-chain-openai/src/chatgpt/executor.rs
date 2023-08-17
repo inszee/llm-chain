@@ -144,8 +144,9 @@ fn as_tiktoken_message(
 ) -> tiktoken_rs::ChatCompletionRequestMessage {
     tiktoken_rs::ChatCompletionRequestMessage {
         role: message.role.to_string(),
-        content: message.content.clone(),
+        content: Some(message.content.clone()),
         name: message.name.clone(),
+        function_call: None
     }
 }
 
