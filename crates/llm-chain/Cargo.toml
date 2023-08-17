@@ -32,6 +32,8 @@ strum = "0.25.0"
 strum_macros = "0.24.3"
 paste = "1.0.12"
 log = "0.4.14"
+text-splitter ={ version = "0.4.3",features = ["tiktoken-rs"]}
+tiktoken-rs = { version = "0.5.0", features = ["async-openai"] }
 
 [dev-dependencies]
 mockall = "0.11.4"

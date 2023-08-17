@@ -180,7 +180,9 @@ impl OpenAITokenizer {
     }
 }
 
+// FIXME: unicode crash!
 impl Tokenizer for OpenAITokenizer {
+    // FIXME: not use!
     fn tokenize_str(&self, doc: &str) -> Result<TokenCollection, TokenizerError> {
         Ok(self
             .get_bpe_from_model()
@@ -189,6 +191,7 @@ impl Tokenizer for OpenAITokenizer {
             .into())
     }
 
+    // FIXME: not use!
     fn to_string(&self, tokens: TokenCollection) -> Result<String, TokenizerError> {
         let res = self
             .get_bpe_from_model()

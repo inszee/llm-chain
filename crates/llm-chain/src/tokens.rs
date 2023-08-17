@@ -9,6 +9,8 @@ use crate::{traits, Parameters};
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
 use thiserror::Error;
+use tiktoken_rs::cl100k_base;
+use text_splitter::TextSplitter;
 
 /// Custom error type for handling prompt token-related errors.
 #[derive(Clone, Debug, Error)]
@@ -69,7 +71,6 @@ pub trait ExecutorTokenCountExt: traits::Executor {
             .into_iter()
             .map(Parameters::new_with_text)
             .collect();
-        log::info!("llm-chain finish ");
         Ok(split_params)
     }
 }
@@ -168,7 +169,10 @@ pub trait Tokenizer {
         max_tokens_per_chunk: usize,
         chunk_overlap: usize,
     ) -> Result<Vec<String>, TokenizerError> {
-        let tokens = self.tokenize_str(doc)?;
+        let tokenizer = cl100k_base().unwrap();
+        let splitter = TextSplitter::new(tokenizer).with_trim_chunks(true);
+        let tokens = splitter.chunks(doc, 1).map(|chunk| chunk.to_string()).collect::<Vec<_>>();
+        
         let step_size = max(
             max_tokens_per_chunk.checked_sub(chunk_overlap).unwrap_or(1),
             1,
@@ -181,7 +185,13 @@ pub trait Tokenizer {
             .step_by(step_size)
             .map(|start_idx| {
                 let end_idx = usize::min(start_idx + max_tokens_per_chunk, tokens.len());
-                self.to_string(tokens.slice(start_idx, end_idx))
+                let combined_string: String = tokens
+                .clone()
+                .into_iter()
+                .skip(start_idx)
+                .take(end_idx - start_idx + 1)
+                .collect();
+                Ok(combined_string)
             })
             .collect()
     }
