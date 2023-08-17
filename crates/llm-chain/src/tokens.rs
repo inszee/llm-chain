@@ -47,22 +47,22 @@ pub trait ExecutorTokenCountExt: traits::Executor {
         base_parameters: &Parameters,
         chunk_overlap: Option<usize>,
     ) -> Result<Vec<Parameters>, PromptTokensError> {
-        log::info!("llm-chain split_to_fit ");
         let splitter = self
             .get_tokenizer(step.options())
             .map_err(|_e| PromptTokensError::UnableToCompute)?;
 
-        log::info!("llm-chain get_tokenizer ");
         let text = doc.get_text().ok_or(PromptTokensError::UnableToCompute)?;
 
         let prompt = step.format(&base_parameters.combine(&Parameters::new_with_text("")))?;
         let tokens_used = self.tokens_used(step.options(), &prompt)?;
         let chunk_overlap = chunk_overlap.unwrap_or(0);
-        log::info!("llm-chain split_params ");
+        //FIX: ERROR："FormatAndExecuteError: Error executing: 
+        //     Unable to run model: invalid_request_error: 
+        //     This model's maximum context length is 4097 tokens. However, your messages resulted in 4097 tokens. Please reduce the length of the messages."
         let split_params = splitter
             .split_text(
                 &text,
-                tokens_used.max_tokens as usize - tokens_used.tokens_used as usize,
+                tokens_used.max_tokens as usize - tokens_used.tokens_used as usize -4 as usize,
                 chunk_overlap,
             )
             .map_err(|_e| PromptTokensError::UnableToCompute)?
@@ -174,6 +174,7 @@ pub trait Tokenizer {
             1,
         );
 
+        log::info!("llm-chain split_text max_tokens_per_chunk = {},step = {}, tokens.len = {}",max_tokens_per_chunk,step_size,tokens.len());
         debug_assert_ne!(step_size, 0);
 
         (0..tokens.len())
