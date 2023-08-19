@@ -170,7 +170,7 @@ pub trait Tokenizer {
         chunk_overlap: usize,
     ) -> Result<Vec<String>, TokenizerError> {
         let tokenizer = cl100k_base().unwrap();
-        let splitter = TextSplitter::new(tokenizer).with_trim_chunks(true);
+        let splitter = TextSplitter::new(tokenizer).with_trim_chunks(false);
         let tokens = splitter.chunks(doc, 1).map(|chunk| chunk.to_string()).collect::<Vec<_>>();
         
         let step_size = max(
