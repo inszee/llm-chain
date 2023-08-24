@@ -56,15 +56,21 @@ pub trait ExecutorTokenCountExt: traits::Executor {
         let text = doc.get_text().ok_or(PromptTokensError::UnableToCompute)?;
 
         let prompt = step.format(&base_parameters.combine(&Parameters::new_with_text("")))?;
+        
+        // token_used for prompt
         let tokens_used = self.tokens_used(step.options(), &prompt)?;
+        // not overlap
         let chunk_overlap = chunk_overlap.unwrap_or(0);
-        //FIX: ERROR："FormatAndExecuteError: Error executing: 
-        //     Unable to run model: invalid_request_error: 
-        //     This model's maximum context length is 4097 tokens. However, your messages resulted in 4097 tokens. Please reduce the length of the messages."
+        let max_reqeust_token_count = tokens_used.max_tokens / 2;
+        let max_split_chunk = if tokens_used.tokens_used > max_reqeust_token_count {
+            max_reqeust_token_count
+        } else {
+            tokens_used.tokens_used
+        };
         let split_params = splitter
             .split_text(
                 &text,
-                tokens_used.max_tokens as usize - tokens_used.tokens_used as usize -4 as usize,
+                max_split_chunk as usize,
                 chunk_overlap,
             )
             .map_err(|_e| PromptTokensError::UnableToCompute)?
