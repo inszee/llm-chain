@@ -8,7 +8,7 @@ use llm_chain::tokens::TokenCollection;
 
 use super::prompt::create_chat_completion_request;
 use super::prompt::format_chat_messages;
-use async_openai::{error::OpenAIError, types::ChatCompletionRequestMessage};
+use async_openai::{error::OpenAIError,config::OpenAIConfig, types::ChatCompletionRequestMessage};
 use llm_chain::prompt::Prompt;
 
 use llm_chain::tokens::PromptTokensError;
@@ -24,17 +24,28 @@ use tiktoken_rs::get_chat_completion_max_tokens;
 use std::sync::Arc;
 
 /// The `Executor` struct for the ChatGPT model. This executor uses the `async_openai` crate to communicate with the OpenAI API.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Executor {
     /// The client used to communicate with the OpenAI API.
-    client: Arc<async_openai::Client>,
+    client: Arc<async_openai::Client<OpenAIConfig>>,
     /// The per-invocation options for this executor.
     options: Options,
 }
 
+impl Default for Executor {
+    fn default() -> Self {
+        let config = OpenAIConfig::default();
+        let client = async_openai::Client::with_config(config);
+        Self {
+            client: Arc::new(client),
+            options: Options::default()
+        }
+    }
+}
+
 impl Executor {
     /// Creates a new `Executor` with the given client.
-    pub fn for_client(client: async_openai::Client, options: Options) -> Self {
+    pub fn for_client(client: async_openai::Client<OpenAIConfig>, options: Options) -> Self {
         use llm_chain::traits::Executor as _;
         let mut exec = Self::new_with_options(options).unwrap();
         exec.client = Arc::new(client);
@@ -70,17 +81,32 @@ impl traits::Executor for Executor {
     ///
     /// if the `OPENAI_ORG_ID` environment variable is present, it will be used as the org_ig for the OpenAI client.
     fn new_with_options(options: Options) -> Result<Self, ExecutorCreationError> {
-        let mut client = async_openai::Client::new();
+        // let mut client = async_openai::Client::new();
+        // let opts = OptionsCascade::new().with_options(&options);
+
+        // if let Some(Opt::ApiKey(api_key)) = opts.get(llm_chain::options::OptDiscriminants::ApiKey) {
+        //     client = client.with_api_key(api_key)
+        // }
+
+        // if let Ok(org_id) = std::env::var("OPENAI_ORG_ID") {
+        //     client = client.with_org_id(org_id);
+        // }
+        
         let opts = OptionsCascade::new().with_options(&options);
+        let open_ai_key = if let Some(Opt::ApiKey(api_key)) = opts.get(llm_chain::options::OptDiscriminants::ApiKey) {
+            api_key
+        } else {
+            ""
+        };
 
-        if let Some(Opt::ApiKey(api_key)) = opts.get(llm_chain::options::OptDiscriminants::ApiKey) {
-            client = client.with_api_key(api_key)
-        }
-
-        if let Ok(org_id) = std::env::var("OPENAI_ORG_ID") {
-            client = client.with_org_id(org_id);
-        }
-        let client = Arc::new(client);
+        let org_id = if let Ok(org_id) = std::env::var("OPENAI_ORG_ID") {
+            org_id
+        } else {
+            "".to_string()
+        };
+        let config = OpenAIConfig::new().with_api_key(open_ai_key).with_org_id(org_id);
+        let client = Arc::new(async_openai::Client::with_config(config));
+        
         Ok(Self { client, options })
     }
 
@@ -144,7 +170,8 @@ fn as_tiktoken_message(
 ) -> tiktoken_rs::ChatCompletionRequestMessage {
     tiktoken_rs::ChatCompletionRequestMessage {
         role: message.role.to_string(),
-        content: Some(message.content.clone()),
+        // content: Some(message.content.clone()),
+        content: message.content.clone(),
         name: message.name.clone(),
         function_call: None
     }

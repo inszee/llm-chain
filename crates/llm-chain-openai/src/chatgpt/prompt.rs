@@ -25,6 +25,7 @@ fn convert_openai_role(role: &Role) -> prompt::ChatRole {
         Role::User => prompt::ChatRole::User,
         Role::Assistant => prompt::ChatRole::Assistant,
         Role::System => prompt::ChatRole::System,
+        Role::Function =>  prompt::ChatRole::Other("function".to_string()),
     }
 }
 
@@ -34,9 +35,10 @@ fn format_chat_message(
     let role = convert_role(message.role());
     let content = message.body().to_string();
     Ok(ChatCompletionRequestMessage {
-        role,
-        content,
+        content: Some(content),
+        role: role,
         name: None,
+        function_call: None,
     })
 }
 
@@ -65,6 +67,8 @@ pub fn create_chat_completion_request(
         frequency_penalty: None,
         logit_bias: None,
         user: None,
+        function_call:None,
+        functions:None
     })
 }
 
@@ -73,7 +77,7 @@ pub fn completion_to_output(resp: CreateChatCompletionResponse) -> Output {
     let mut col = ChatMessageCollection::new();
     col.add_message(ChatMessage::new(
         convert_openai_role(&msg.role),
-        msg.content,
+        msg.content.unwrap(),
     ));
     Output::new_immediate(col.into())
 }

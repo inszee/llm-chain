@@ -54,10 +54,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b13c32d80ecc7ab747b80c3784bce54ee8a7a0cc4fbda9bf4cda2cf6fe90854"
 
 [[package]]
-name = "async-openai"
-version = "0.10.3"
+name = "async-convert"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5d5e93aca1b2f0ca772c76cadd43e965809df87ef98e25e47244c7f006c85d2"
+checksum = "6d416feee97712e43152cd42874de162b8f9b77295b1c85e5d92725cc8310bae"
+dependencies = [
+ "async-trait",
+]
+
+[[package]]
+name = "async-openai"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e50e3cbfb9fc7bf556cf75d866a7b73127c770a8869b8ea781b603136895ed69"
 dependencies = [
  "backoff",
  "base64 0.21.2",
@@ -77,10 +86,11 @@ dependencies = [
 
 [[package]]
 name = "async-openai"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e50e3cbfb9fc7bf556cf75d866a7b73127c770a8869b8ea781b603136895ed69"
+checksum = "7614373e1d24d44f7b57df2125c5253c7afbf927574f2695371e5589a0dd4937"
 dependencies = [
+ "async-convert",
  "backoff",
  "base64 0.21.2",
  "derive_builder",
@@ -1459,7 +1469,7 @@ name = "llm-chain-openai"
 version = "0.12.3"
 dependencies = [
  "anyhow",
- "async-openai 0.10.3",
+ "async-openai 0.14.0",
  "async-trait",
  "futures",
  "llm-chain",
