@@ -22,7 +22,7 @@ use llm_chain::tokens::TokenCount;
 use tiktoken_rs::get_chat_completion_max_tokens;
 
 use std::sync::Arc;
-
+use tokio::time::{sleep, Duration};
 /// The `Executor` struct for the ChatGPT model. This executor uses the `async_openai` crate to communicate with the OpenAI API.
 #[derive(Clone)]
 pub struct Executor {
@@ -118,21 +118,38 @@ impl traits::Executor for Executor {
         let retry_client = client.clone();
         let retry_input = input.clone();
         if opts.is_streaming() {
-            let res = async move { client.chat().create_stream(input).await }
-                .await
-                .map_err(|e| ExecutorError::InnerError(e.into()))?;
-            Ok(stream_to_output(res))
-        } else {
-            let res = async move { client.chat().create(input).await }
-                .await
-                .map_err(|e| ExecutorError::InnerError(e.into()))?;
-            match completion_to_output(res) {
-                Ok(output) => {
-                    Ok(output)
+            match async move { client.chat().create_stream(input).await }.await {
+                Ok(client_normal) => {
+                    Ok(stream_to_output(client_normal))
                 }
                 Err(err) => {
-                    // retry one more time
-                    log::error!("llm-chain execute prompt error = {} ", err);
+                    log::error!("llm-chain execute create_stream error = {},retry ", err);
+                    sleep(Duration::from_millis(1000)).await;
+                    let res = async move { retry_client.chat().create_stream(retry_input).await }
+                    .await
+                    .map_err(|e| ExecutorError::InnerError(e.into()))?;
+                    Ok(stream_to_output(res))
+                }
+            }
+        } else {
+            match async move { client.chat().create(input).await }.await {
+                Ok(client_normal) => {
+                    match completion_to_output(client_normal) {
+                        Ok(output) => {
+                            Ok(output)
+                        }
+                        Err(err) => {
+                             // retry one more time
+                             log::error!("llm-chain execute competion error = {},retry", err);
+                             let res = async move { retry_client.chat().create(retry_input).await }.await.map_err(|e| ExecutorError::InnerError(e.into()))?;
+                             let output = completion_to_output(res).map_err(|err| ExecutorError::ResoponseCompleteError(err.to_string()))?;
+                             Ok(output)
+                         }
+                    }
+                }
+                Err(err) => {
+                    log::error!("llm-chain execute create error = {},retry ", err);
+                    sleep(Duration::from_millis(1000)).await;
                     let res = async move { retry_client.chat().create(retry_input).await }
                     .await
                     .map_err(|e| ExecutorError::InnerError(e.into()))?;
