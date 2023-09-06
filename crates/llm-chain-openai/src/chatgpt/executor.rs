@@ -130,8 +130,9 @@ impl traits::Executor for Executor {
                 Ok(output) => {
                     Ok(output)
                 }
-                Err(_) => {
+                Err(err) => {
                     // retry one more time
+                    log::error!("llm-chain execute prompt error = {} ", err);
                     let res = async move { retry_client.chat().create(retry_input).await }
                     .await
                     .map_err(|e| ExecutorError::InnerError(e.into()))?;

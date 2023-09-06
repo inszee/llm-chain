@@ -23,6 +23,7 @@ strum_macros = "0.24"
 thiserror = "1.0.40"
 tiktoken-rs = { version = "0.5.0", features = ["async-openai"] }
 tokio = "1.28.2"
+log = "0.4"
 
 [dev-dependencies]
 tokio = "1.28.2"
