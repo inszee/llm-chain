@@ -124,7 +124,7 @@ impl traits::Executor for Executor {
                 }
                 Err(err) => {
                     log::error!("llm-chain execute create_stream error = {},retry ", err);
-                    sleep(Duration::from_millis(1000)).await;
+                    sleep(Duration::from_millis(500)).await;
                     let res = async move { retry_client.chat().create_stream(retry_input).await }
                     .await
                     .map_err(|e| ExecutorError::InnerError(e.into()))?;
@@ -141,6 +141,7 @@ impl traits::Executor for Executor {
                         Err(err) => {
                              // retry one more time
                              log::error!("llm-chain execute competion error = {},retry", err);
+                             sleep(Duration::from_millis(500)).await;
                              let res = async move { retry_client.chat().create(retry_input).await }.await.map_err(|e| ExecutorError::InnerError(e.into()))?;
                              let output = completion_to_output(res).map_err(|err| ExecutorError::ResoponseCompleteError(err.to_string()))?;
                              Ok(output)
@@ -149,7 +150,7 @@ impl traits::Executor for Executor {
                 }
                 Err(err) => {
                     log::error!("llm-chain execute create error = {},retry ", err);
-                    sleep(Duration::from_millis(1000)).await;
+                    sleep(Duration::from_millis(500)).await;
                     let res = async move { retry_client.chat().create(retry_input).await }
                     .await
                     .map_err(|e| ExecutorError::InnerError(e.into()))?;
