@@ -43,6 +43,8 @@ pub enum ExecutorError {
     PromptTokens(PromptTokensError),
     #[error("the context was to small to fit your input")]
     ContextTooSmall,
+    #[error("Response finished reason : {0}")]
+    ResoponseCompleteError(String),
 }
 
 #[async_trait]

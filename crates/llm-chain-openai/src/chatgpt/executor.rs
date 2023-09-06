@@ -115,6 +115,8 @@ impl traits::Executor for Executor {
         let client = self.client.clone();
         let model = self.get_model_from_invocation_options(&opts);
         let input = create_chat_completion_request(model, prompt, opts.is_streaming()).unwrap();
+        let retry_client = client.clone();
+        let retry_input = input.clone();
         if opts.is_streaming() {
             let res = async move { client.chat().create_stream(input).await }
                 .await
@@ -124,7 +126,20 @@ impl traits::Executor for Executor {
             let res = async move { client.chat().create(input).await }
                 .await
                 .map_err(|e| ExecutorError::InnerError(e.into()))?;
-            Ok(completion_to_output(res))
+            match completion_to_output(res) {
+                Ok(output) => {
+                    Ok(output)
+                }
+                Err(_) => {
+                    // retry one more time
+                    let res = async move { retry_client.chat().create(retry_input).await }
+                    .await
+                    .map_err(|e| ExecutorError::InnerError(e.into()))?;
+
+                    let output = completion_to_output(res).map_err(|err| ExecutorError::ResoponseCompleteError(err.to_string()))?;
+                    Ok(output)
+                }
+            }
         }
     }
 

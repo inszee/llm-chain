@@ -10,6 +10,14 @@ use llm_chain::{
 };
 
 use async_openai::types::{ChatCompletionResponseStream, CreateChatCompletionResponse};
+use thiserror::Error;
+use serde::{Deserialize, Serialize};
+
+#[derive(Error, Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub enum OpenAIResponseCompleteError {
+    #[error("Not finished: {0}")]
+    NotFinishReason(String),
+}
 
 fn convert_role(role: &prompt::ChatRole) -> Role {
     match role {
@@ -72,14 +80,29 @@ pub fn create_chat_completion_request(
     })
 }
 
-pub fn completion_to_output(resp: CreateChatCompletionResponse) -> Output {
+pub fn completion_to_output(resp: CreateChatCompletionResponse) -> Result<Output,OpenAIResponseCompleteError> {
+    let finish_reason_opt = resp.choices.first().unwrap().finish_reason.clone();
+    if finish_reason_opt.is_some() {
+        /*
+        Every response will include a finish_reason. The possible values for finish_reason are:
+
+        stop: API returned complete message, or a message terminated by one of the stop sequences provided via the stop parameter
+        length: Incomplete model output due to max_tokens parameter or token limit
+        function_call: The model decided to call a function
+        content_filter: Omitted content due to a flag from our content filters
+        null: API response still in progress or incomplete
+        */
+        if !finish_reason_opt.clone().unwrap().eq_ignore_ascii_case("stop") {
+            return Err(OpenAIResponseCompleteError::NotFinishReason(finish_reason_opt.unwrap()));
+        }
+    }
     let msg = resp.choices.first().unwrap().message.clone();
     let mut col = ChatMessageCollection::new();
     col.add_message(ChatMessage::new(
         convert_openai_role(&msg.role),
         msg.content.unwrap(),
     ));
-    Output::new_immediate(col.into())
+    Ok(Output::new_immediate(col.into()))
 }
 
 pub fn stream_to_output(resp: ChatCompletionResponseStream) -> Output {
