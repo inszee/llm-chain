@@ -31,38 +31,38 @@ impl traits::Embeddings for Embeddings {
     type Error = OpenAIEmbeddingsError;
 
     async fn embed_texts(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>, Self::Error> {
-        // self.client
-        //     .embeddings()
-        //     .create(CreateEmbeddingRequest {
-        //         model: self.model.clone(),
-        //         user: None,
-        //         input: EmbeddingInput::from(texts),
-        //     })
-        //     .await
-        //     .map(|r| r.data.into_iter().map(|e| e.embedding).collect())
-        //     .map_err(|e| e.into())
-        match self.client.embeddings().create(CreateEmbeddingRequest {
-            model: self.model.clone(),
-            user: None,
-            input: EmbeddingInput::from(texts.clone()),
-        }).await {
-            Ok(r) => {
-                Ok(r.data.into_iter().map(|e| e.embedding).collect())
-            }
-            Err(err) => {
-                log::error!("llm-chain embed_texts create error = {},retry ", err);
-                sleep(Duration::from_millis(500)).await;
-                self.client.embeddings()
-                .create(CreateEmbeddingRequest {
-                    model: self.model.clone(),
-                    user: None,
-                    input: EmbeddingInput::from(texts),
-                })
-                .await
-                .map(|r| r.data.into_iter().map(|e| e.embedding).collect())
-                .map_err(|e| e.into())
-            }
-        }
+        self.client
+            .embeddings()
+            .create(CreateEmbeddingRequest {
+                model: self.model.clone(),
+                user: None,
+                input: EmbeddingInput::from(texts),
+            })
+            .await
+            .map(|r| r.data.into_iter().map(|e| e.embedding).collect())
+            .map_err(|e| e.into())
+        // match self.client.embeddings().create(CreateEmbeddingRequest {
+        //     model: self.model.clone(),
+        //     user: None,
+        //     input: EmbeddingInput::from(texts.clone()),
+        // }).await {
+        //     Ok(r) => {
+        //         Ok(r.data.into_iter().map(|e| e.embedding).collect())
+        //     }
+        //     Err(err) => {
+        //         log::error!("llm-chain embed_texts create error = {},retry ", err);
+        //         sleep(Duration::from_millis(500)).await;
+        //         self.client.embeddings()
+        //         .create(CreateEmbeddingRequest {
+        //             model: self.model.clone(),
+        //             user: None,
+        //             input: EmbeddingInput::from(texts),
+        //         })
+        //         .await
+        //         .map(|r| r.data.into_iter().map(|e| e.embedding).collect())
+        //         .map_err(|e| e.into())
+        //     }
+        // }
     }
 
     async fn embed_query(&self, query: String) -> Result<Vec<f32>, Self::Error> {
