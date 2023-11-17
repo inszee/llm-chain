@@ -1,10 +1,11 @@
+use std::sync::Arc;
+
 use llm_chain::{schema::EmptyMetadata, traits::VectorStore};
 use llm_chain_qdrant::Qdrant;
 use qdrant_client::{
     prelude::{QdrantClient, QdrantClientConfig},
     qdrant::{CreateCollection, Distance, VectorParams, VectorsConfig},
 };
-use std::sync::Arc;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
@@ -25,11 +26,11 @@ async fn main() {
                 vectors_config: Some(VectorsConfig {
                     config: Some(qdrant_client::qdrant::vectors_config::Config::Params(
                         VectorParams {
+                            on_disk: None,
                             size: embedding_size,
                             distance: Distance::Cosine.into(),
                             hnsw_config: None,
                             quantization_config: None,
-                            on_disk: None,
                         },
                     )),
                 }),
@@ -46,6 +47,7 @@ async fn main() {
         client.clone(),
         collection_name.clone(),
         embeddings,
+        None,
         None,
         None,
     );

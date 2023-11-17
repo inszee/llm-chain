@@ -1,14 +1,13 @@
 use std::sync::Arc;
 
 use async_openai::{
+    config::OpenAIConfig,
     error::OpenAIError,
-    config::{OpenAIConfig},
-    types::{CreateEmbeddingRequest, EmbeddingInput},
+    types::{CreateEmbeddingRequestArgs, EmbeddingInput},
 };
 use async_trait::async_trait;
 use llm_chain::traits::{self, EmbeddingsError};
 use thiserror::Error;
-use tokio::time::{sleep, Duration};
 
 pub struct Embeddings {
     client: Arc<async_openai::Client<OpenAIConfig>>,
@@ -31,48 +30,26 @@ impl traits::Embeddings for Embeddings {
     type Error = OpenAIEmbeddingsError;
 
     async fn embed_texts(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>, Self::Error> {
+        let req = CreateEmbeddingRequestArgs::default()
+            .model(self.model.clone())
+            .input(EmbeddingInput::from(texts))
+            .build()?;
         self.client
             .embeddings()
-            .create(CreateEmbeddingRequest {
-                model: self.model.clone(),
-                user: None,
-                input: EmbeddingInput::from(texts),
-            })
+            .create(req)
             .await
             .map(|r| r.data.into_iter().map(|e| e.embedding).collect())
             .map_err(|e| e.into())
-        // match self.client.embeddings().create(CreateEmbeddingRequest {
-        //     model: self.model.clone(),
-        //     user: None,
-        //     input: EmbeddingInput::from(texts.clone()),
-        // }).await {
-        //     Ok(r) => {
-        //         Ok(r.data.into_iter().map(|e| e.embedding).collect())
-        //     }
-        //     Err(err) => {
-        //         log::error!("llm-chain embed_texts create error = {},retry ", err);
-        //         sleep(Duration::from_millis(500)).await;
-        //         self.client.embeddings()
-        //         .create(CreateEmbeddingRequest {
-        //             model: self.model.clone(),
-        //             user: None,
-        //             input: EmbeddingInput::from(texts),
-        //         })
-        //         .await
-        //         .map(|r| r.data.into_iter().map(|e| e.embedding).collect())
-        //         .map_err(|e| e.into())
-        //     }
-        // }
     }
 
     async fn embed_query(&self, query: String) -> Result<Vec<f32>, Self::Error> {
+        let req = CreateEmbeddingRequestArgs::default()
+            .model(self.model.clone())
+            .input(EmbeddingInput::from(query))
+            .build()?;
         self.client
             .embeddings()
-            .create(CreateEmbeddingRequest {
-                model: self.model.clone(),
-                user: None,
-                input: EmbeddingInput::from(query),
-            })
+            .create(req)
             .await
             .map(|r| r.data.into_iter())?
             .map(|e| e.embedding)
@@ -83,10 +60,9 @@ impl traits::Embeddings for Embeddings {
 
 impl Default for Embeddings {
     fn default() -> Self {
-        let config = OpenAIConfig::default();
-        let client = async_openai::Client::with_config(config);
+        let client = Arc::new(async_openai::Client::<OpenAIConfig>::new());
         Self {
-            client: Arc::new(client),
+            client,
             model: "text-embedding-ada-002".to_string(),
         }
     }

@@ -65,8 +65,8 @@ async fn build_local_qdrant() -> Qdrant<Embeddings, EmptyMetadata> {
                             size: embedding_size,
                             distance: Distance::Cosine.into(),
                             hnsw_config: None,
-                            quantization_config: None,
                             on_disk: None,
+                            quantization_config: None,
                         },
                     )),
                 }),
@@ -82,6 +82,7 @@ async fn build_local_qdrant() -> Qdrant<Embeddings, EmptyMetadata> {
         client,
         collection_name,
         embeddings,
+        None,
         None,
         None,
     );

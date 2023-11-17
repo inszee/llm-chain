@@ -1,14 +1,21 @@
+use super::error::OpenAIInnerError;
 use super::prompt::completion_to_output;
 use super::prompt::stream_to_output;
+use async_openai::config::OpenAIConfig;
+use async_openai::types::ChatCompletionRequestMessage;
+
+use async_openai::types::ChatCompletionRequestUserMessageContent;
 use llm_chain::options::Opt;
 use llm_chain::options::Options;
 use llm_chain::options::OptionsCascade;
 use llm_chain::output::Output;
 use llm_chain::tokens::TokenCollection;
+use tiktoken_rs::get_bpe_from_tokenizer;
+use tiktoken_rs::tokenizer::get_tokenizer;
 
 use super::prompt::create_chat_completion_request;
 use super::prompt::format_chat_messages;
-use async_openai::{error::OpenAIError,config::OpenAIConfig, types::ChatCompletionRequestMessage};
+use async_openai::error::OpenAIError;
 use llm_chain::prompt::Prompt;
 
 use llm_chain::tokens::PromptTokensError;
@@ -18,8 +25,6 @@ use llm_chain::traits::{ExecutorCreationError, ExecutorError};
 
 use async_trait::async_trait;
 use llm_chain::tokens::TokenCount;
-
-use tiktoken_rs::get_chat_completion_max_tokens;
 
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
@@ -34,12 +39,9 @@ pub struct Executor {
 
 impl Default for Executor {
     fn default() -> Self {
-        let config = OpenAIConfig::default();
-        let client = async_openai::Client::with_config(config);
-        Self {
-            client: Arc::new(client),
-            options: Options::default()
-        }
+        let options = Options::default();
+        let client = Arc::new(async_openai::Client::new());
+        Self { client, options }
     }
 }
 
@@ -54,7 +56,7 @@ impl Executor {
 
     fn get_model_from_invocation_options(&self, opts: &OptionsCascade) -> String {
         let Some(Opt::Model(model)) = opts.get(llm_chain::options::OptDiscriminants::Model) else {
-            return "gpt-3.5-turbo".to_string()
+            return "gpt-3.5-turbo".to_string();
         };
         model.to_name()
     }
@@ -81,32 +83,18 @@ impl traits::Executor for Executor {
     ///
     /// if the `OPENAI_ORG_ID` environment variable is present, it will be used as the org_ig for the OpenAI client.
     fn new_with_options(options: Options) -> Result<Self, ExecutorCreationError> {
-        // let mut client = async_openai::Client::new();
-        // let opts = OptionsCascade::new().with_options(&options);
+        let mut cfg = OpenAIConfig::new();
 
-        // if let Some(Opt::ApiKey(api_key)) = opts.get(llm_chain::options::OptDiscriminants::ApiKey) {
-        //     client = client.with_api_key(api_key)
-        // }
-
-        // if let Ok(org_id) = std::env::var("OPENAI_ORG_ID") {
-        //     client = client.with_org_id(org_id);
-        // }
-        
         let opts = OptionsCascade::new().with_options(&options);
-        let open_ai_key = if let Some(Opt::ApiKey(api_key)) = opts.get(llm_chain::options::OptDiscriminants::ApiKey) {
-            api_key
-        } else {
-            ""
-        };
 
-        let org_id = if let Ok(org_id) = std::env::var("OPENAI_ORG_ID") {
-            org_id
-        } else {
-            "".to_string()
-        };
-        let config = OpenAIConfig::new().with_api_key(open_ai_key).with_org_id(org_id);
-        let client = Arc::new(async_openai::Client::with_config(config));
-        
+        if let Some(Opt::ApiKey(api_key)) = opts.get(llm_chain::options::OptDiscriminants::ApiKey) {
+            cfg = cfg.with_api_key(api_key)
+        }
+
+        if let Ok(org_id) = std::env::var("OPENAI_ORG_ID") {
+            cfg = cfg.with_org_id(org_id);
+        }
+        let client = Arc::new(async_openai::Client::with_config(cfg));
         Ok(Self { client, options })
     }
 
@@ -134,19 +122,7 @@ impl traits::Executor for Executor {
         } else {
             match async move { client.chat().create(input).await }.await {
                 Ok(client_normal) => {
-                    match completion_to_output(client_normal) {
-                        Ok(output) => {
-                            Ok(output)
-                        }
-                        Err(err) => {
-                             // retry one more time
-                             log::error!("llm-chain execute competion error = {},retry", err);
-                             sleep(Duration::from_millis(500)).await;
-                             let res = async move { retry_client.chat().create(retry_input).await }.await.map_err(|e| ExecutorError::InnerError(e.into()))?;
-                             let output = completion_to_output(res).map_err(|err| ExecutorError::ResoponseCompleteError(err.to_string()))?;
-                             Ok(output)
-                         }
-                    }
+                    Ok(completion_to_output(client_normal))
                 }
                 Err(err) => {
                     log::error!("llm-chain execute create error = {},retry ", err);
@@ -155,7 +131,7 @@ impl traits::Executor for Executor {
                     .await
                     .map_err(|e| ExecutorError::InnerError(e.into()))?;
 
-                    let output = completion_to_output(res).map_err(|err| ExecutorError::ResoponseCompleteError(err.to_string()))?;
+                    let output = completion_to_output(res);
                     Ok(output)
                 }
             }
@@ -169,12 +145,12 @@ impl traits::Executor for Executor {
     ) -> Result<TokenCount, PromptTokensError> {
         let opts_cas = self.cascade(Some(opts));
         let model = self.get_model_from_invocation_options(&opts_cas);
-        let messages: Vec<ChatCompletionRequestMessage> = format_chat_messages(prompt.to_chat())?;
-        let no_messages: Vec<tiktoken_rs::ChatCompletionRequestMessage> = Vec::new();
-        let tokens_used = get_chat_completion_max_tokens(&model, no_messages.as_slice())
-            .map_err(|_| PromptTokensError::NotAvailable)?
-            - get_chat_completion_max_tokens(&model, as_tiktoken_messages(messages).as_slice())
-                .map_err(|_| PromptTokensError::NotAvailable)?;
+        let messages = format_chat_messages(prompt.to_chat()).map_err(|e| match e {
+            OpenAIInnerError::StringTemplateError(e) => PromptTokensError::PromptFormatFailed(e),
+            _ => PromptTokensError::UnableToCompute,
+        })?;
+        let tokens_used = num_tokens_from_messages(&model, &messages)
+            .map_err(|_| PromptTokensError::NotAvailable)?;
 
         Ok(TokenCount::new(
             self.max_tokens_allowed(opts),
@@ -199,22 +175,70 @@ impl traits::Executor for Executor {
     }
 }
 
-fn as_tiktoken_message(
-    message: &ChatCompletionRequestMessage,
-) -> tiktoken_rs::ChatCompletionRequestMessage {
-    tiktoken_rs::ChatCompletionRequestMessage {
-        role: message.role.to_string(),
-        // content: Some(message.content.clone()),
-        content: message.content.clone(),
-        name: message.name.clone(),
-        function_call: None
+fn num_tokens_from_messages(
+    model: &str,
+    messages: &[ChatCompletionRequestMessage],
+) -> Result<usize, PromptTokensError> {
+    let tokenizer = get_tokenizer(model).ok_or_else(|| PromptTokensError::NotAvailable)?;
+    if tokenizer != tiktoken_rs::tokenizer::Tokenizer::Cl100kBase {
+        return Err(PromptTokensError::NotAvailable);
     }
-}
+    let bpe = get_bpe_from_tokenizer(tokenizer).map_err(|_| PromptTokensError::NotAvailable)?;
 
-fn as_tiktoken_messages(
-    messages: Vec<ChatCompletionRequestMessage>,
-) -> Vec<tiktoken_rs::ChatCompletionRequestMessage> {
-    messages.iter().map(|x| as_tiktoken_message(x)).collect()
+    let (tokens_per_message, tokens_per_name) = if model.starts_with("gpt-3.5") {
+        (
+            4,  // every message follows <im_start>{role/name}\n{content}<im_end>\n
+            -1, // if there's a name, the role is omitted
+        )
+    } else {
+        (3, 1)
+    };
+
+    let mut num_tokens: i32 = 0;
+    for message in messages {
+        let (role, content, name) = match message {
+            ChatCompletionRequestMessage::System(x) => (
+                x.role.to_string(),
+                x.content.to_owned().unwrap_or_default(),
+                None,
+            ),
+            ChatCompletionRequestMessage::User(x) => (
+                x.role.to_string(),
+                x.content
+                    .as_ref()
+                    .and_then(|x| match x {
+                        ChatCompletionRequestUserMessageContent::Text(x) => Some(x.to_string()),
+                        _ => None,
+                    })
+                    .unwrap_or_default(),
+                None,
+            ),
+            ChatCompletionRequestMessage::Assistant(x) => (
+                x.role.to_string(),
+                x.content.to_owned().unwrap_or_default(),
+                None,
+            ),
+            ChatCompletionRequestMessage::Tool(x) => (
+                x.role.to_string(),
+                x.content.to_owned().unwrap_or_default(),
+                None,
+            ),
+            ChatCompletionRequestMessage::Function(x) => (
+                x.role.to_string(),
+                x.content.to_owned().unwrap_or_default(),
+                None,
+            ),
+        };
+        num_tokens += tokens_per_message;
+        num_tokens += bpe.encode_with_special_tokens(&role).len() as i32;
+        num_tokens += bpe.encode_with_special_tokens(&content).len() as i32;
+        if let Some(name) = name {
+            num_tokens += bpe.encode_with_special_tokens(name).len() as i32;
+            num_tokens += tokens_per_name;
+        }
+    }
+    num_tokens += 3; // every reply is primed with <|start|>assistant<|message|>
+    Ok(num_tokens as usize)
 }
 
 pub struct OpenAITokenizer {
@@ -241,9 +265,7 @@ impl OpenAITokenizer {
     }
 }
 
-// FIXME: unicode crash!
 impl Tokenizer for OpenAITokenizer {
-    // FIXME: not use!
     fn tokenize_str(&self, doc: &str) -> Result<TokenCollection, TokenizerError> {
         Ok(self
             .get_bpe_from_model()
@@ -252,7 +274,6 @@ impl Tokenizer for OpenAITokenizer {
             .into())
     }
 
-    // FIXME: not use!
     fn to_string(&self, tokens: TokenCollection) -> Result<String, TokenizerError> {
         let res = self
             .get_bpe_from_model()
