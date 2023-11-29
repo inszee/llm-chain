@@ -5,7 +5,7 @@ use qdrant_client::{
     prelude::QdrantClient,
     qdrant::{
         value::Kind, with_payload_selector::SelectorOptions, Filter, PayloadIncludeSelector,
-        PointId, PointStruct, ScoredPoint, SearchPoints, Value, Vectors, WithPayloadSelector,
+        PointId, PointStruct, ScoredPoint, SearchPoints, Value, Vectors, WithPayloadSelector, SearchParams,
     },
 };
 use thiserror::Error;
@@ -237,7 +237,7 @@ where
                         ],
                     })),
                 }),
-                params: None,
+                params: Some(SearchParams{ hnsw_ef: None, exact: Some(true), quantization: None, indexed_only: None }),
                 score_threshold: None,
                 offset: None,
                 vector_name: None,
