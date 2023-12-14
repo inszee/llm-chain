@@ -28,6 +28,7 @@ pub enum PromptTokensError {
     TokenizerError(#[from] crate::tokens::TokenizerError),
 }
 
+
 /// An extension trait for the `Executor` trait that provides additional methods for working
 /// with token counts.
 pub trait ExecutorTokenCountExt: traits::Executor {
@@ -67,13 +68,27 @@ pub trait ExecutorTokenCountExt: traits::Executor {
         };
         let chunk_overlap = if max_chunk_token > 4096 { chunk_overlap.unwrap_or(200) } else { chunk_overlap.unwrap_or(0)};
         
-        let split_params = splitter
-            .split_text(
-                &text,
-                max_chunk_token,
-                chunk_overlap,
-            )
-            .map_err(|_e| PromptTokensError::UnableToCompute)?
+        let mut origin_split_vec = splitter
+        .split_text(
+            &text,
+            max_chunk_token,
+            chunk_overlap,
+        )
+        .map_err(|_e| PromptTokensError::UnableToCompute)?;
+    
+        let mut split_vec = vec![];
+        // better spliter
+        let length = origin_split_vec.len();
+        for (index, content) in origin_split_vec.iter_mut().enumerate() {
+            let push_string = if index != 0 && index != length - 1 {
+                truncate_text(content)
+            } else {
+                content.to_owned()
+            };
+            split_vec.push(push_string);
+        }
+
+        let split_params = split_vec
             .into_iter()
             .map(Parameters::new_with_text)
             .collect();
@@ -314,4 +329,126 @@ impl From<Vec<usize>> for TokenCollection {
     fn from(v: Vec<usize>) -> Self {
         TokenCollection(TokenCollectionImpl::Usize(v))
     }
+}
+
+
+fn remove_last_match(text: &str, pattern: &str) -> String {
+    if let Some(index) = text.rfind(pattern) {
+        let removed = text[..index].to_owned();
+        removed
+    } else {
+        text.to_owned()
+    }
+}
+
+fn remove_first_match(text: &str, pattern: &str) -> String {
+    if let Some(_) = text.find(pattern) {
+        let removed = text[pattern.len()..].to_owned();
+        removed
+    } else {
+        text.to_owned()
+    }
+}
+
+fn truncate_text_rev(text: &str) -> String {
+    let mut truncated = String::new();
+    let mut char_count = 0;
+    let mut found_period = false;
+
+    for c in text.chars().rev() {
+        if  c == '。'
+          || c == '，'
+          || c == '?'
+          || c == '？'
+          || c == '!'
+          || c == '！'
+          || c == ';'
+          || c == '；'
+          || c == ')'
+          || c == '）'
+          || c == ']'
+          || c == '】'
+          || c == '}' {
+            found_period = true;
+            break;
+        }
+
+        truncated.insert(0, c);
+        char_count += 1;
+
+        if char_count >= 50 {
+            break;
+        }
+    }
+
+    if found_period {
+        let last_period_index = truncated.rfind('。')
+        .or(truncated.rfind('，'))
+        .or(truncated.rfind('?'))
+        .or(truncated.rfind('？'))
+        .or(truncated.rfind('!'))
+        .or(truncated.rfind('！'))
+        .or(truncated.rfind(';'))
+        .or(truncated.rfind('；'))
+        .or(truncated.rfind(')'))
+        .or(truncated.rfind('）'))
+        .or(truncated.rfind(']'))
+        .or(truncated.rfind('】'))
+        .or(truncated.rfind('}'))
+        .unwrap_or(truncated.len());
+        truncated.truncate(last_period_index + 1);
+        let need_truncated = truncated.chars().collect::<String>();
+        remove_last_match(text,&need_truncated)
+    } else {
+        text.to_string()
+    }
+}
+
+fn truncate_text_forward(text: &str) -> String {
+    let mut truncated = String::new();
+    let mut char_count = 0;
+    let mut found_period = false;
+
+    if text.len() < 50 {
+        return text.to_string()
+    } else {
+        for c in text.chars() {
+            if c == '。'
+            || c == '，'
+            || c == '?'
+            || c == '？'
+            || c == '!'
+            || c == '！'
+            || c == ';'
+            || c == '；'
+            || c == '('
+            || c == '（'
+            || c == '['
+            || c == '【'
+            || c == '{' {
+              found_period = true;
+              break;
+          }
+            truncated.insert(0, c);
+            char_count += 1;
+    
+            if char_count >= 50 {
+                println!("char_count>50");
+                break;
+            }
+        }
+    
+        if found_period {
+            let trim_truncated = truncated.chars().rev().collect::<String>();
+            // println!("trim_truncated = {}",trim_truncated);
+            remove_first_match(text,&trim_truncated)
+        } else {
+            text.to_string()
+        }
+    }
+}
+
+pub fn truncate_text(text: &str) -> String {
+    let truncate_forward = truncate_text_forward(text);
+    truncate_text_rev(&truncate_forward)
 }
