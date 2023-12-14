@@ -354,53 +354,56 @@ fn truncate_text_rev(text: &str) -> String {
     let mut truncated = String::new();
     let mut char_count = 0;
     let mut found_period = false;
-
-    for c in text.chars().rev() {
-        if  c == '。'
-          || c == '，'
-          || c == '?'
-          || c == '？'
-          || c == '!'
-          || c == '！'
-          || c == ';'
-          || c == '；'
-          || c == ')'
-          || c == '）'
-          || c == ']'
-          || c == '】'
-          || c == '}' {
-            found_period = true;
-            break;
-        }
-
-        truncated.insert(0, c);
-        char_count += 1;
-
-        if char_count >= 50 {
-            break;
-        }
-    }
-
-    if found_period {
-        let last_period_index = truncated.rfind('。')
-        .or(truncated.rfind('，'))
-        .or(truncated.rfind('?'))
-        .or(truncated.rfind('？'))
-        .or(truncated.rfind('!'))
-        .or(truncated.rfind('！'))
-        .or(truncated.rfind(';'))
-        .or(truncated.rfind('；'))
-        .or(truncated.rfind(')'))
-        .or(truncated.rfind('）'))
-        .or(truncated.rfind(']'))
-        .or(truncated.rfind('】'))
-        .or(truncated.rfind('}'))
-        .unwrap_or(truncated.len());
-        truncated.truncate(last_period_index + 1);
-        let need_truncated = truncated.chars().collect::<String>();
-        remove_last_match(text,&need_truncated)
+    if text.len() < 50 {
+        return text.to_string()
     } else {
-        text.to_string()
+        for c in text.chars().rev() {
+            if  c == '。'
+              || c == '，'
+              || c == '?'
+              || c == '？'
+              || c == '!'
+              || c == '！'
+              || c == ';'
+              || c == '；'
+              || c == ')'
+              || c == '）'
+              || c == ']'
+              || c == '】'
+              || c == '}' {
+                found_period = true;
+                break;
+            }
+    
+            truncated.insert(0, c);
+            char_count += 1;
+    
+            if char_count >= 50 {
+                break;
+            }
+        }
+    
+        if found_period {
+            let last_period_index = truncated.rfind('。')
+            .or(truncated.rfind('，'))
+            .or(truncated.rfind('?'))
+            .or(truncated.rfind('？'))
+            .or(truncated.rfind('!'))
+            .or(truncated.rfind('！'))
+            .or(truncated.rfind(';'))
+            .or(truncated.rfind('；'))
+            .or(truncated.rfind(')'))
+            .or(truncated.rfind('）'))
+            .or(truncated.rfind(']'))
+            .or(truncated.rfind('】'))
+            .or(truncated.rfind('}'))
+            .unwrap_or(truncated.len());
+            truncated.truncate(last_period_index + 1);
+            let need_truncated = truncated.chars().collect::<String>();
+            remove_last_match(text,&need_truncated)
+        } else {
+            text.to_string()
+        }
     }
 }
 
