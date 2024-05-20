@@ -281,7 +281,7 @@ where
                         ],
                     })),
                 }),
-                params: Some(SearchParams{ hnsw_ef: None, exact: Some(true), quantization: None, indexed_only: None }),
+                params: Some(SearchParams{ hnsw_ef: None, exact: None, quantization: None, indexed_only: None }),
                 score_threshold: None,
                 offset: None,
                 vector_name: None,
