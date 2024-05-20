@@ -6,6 +6,7 @@ use qdrant_client::{
     qdrant::{
         value::Kind, with_payload_selector::SelectorOptions, Filter, PayloadIncludeSelector,
         PointId, PointStruct, ScoredPoint, SearchPoints, Value, Vectors, WithPayloadSelector, SearchParams,
+        RetrievedPoint,
     },
 };
 use thiserror::Error;
@@ -99,6 +100,49 @@ where
         } else {
             Err(ConversionError::InvalidPageContent {
                 point_id: scored_point.id,
+            }
+            .into())
+        }
+    }
+
+    pub fn try_document_from_scroll_point(
+        &self,
+        retrieved_point: RetrievedPoint,
+    ) -> Result<Document<M>, QdrantError<E::Error>> {
+        let metadata = retrieved_point.payload.get(&self.metadata_payload_key);
+        let metadata: Option<M> = match metadata.cloned() {
+            Some(val) => {
+                let j = serde_json::to_value(val).map_err(QdrantError::Serde)?;
+                Some(serde_json::from_value(j).map_err(QdrantError::Serde)?)
+            }
+            None => None,
+        };
+        let page_content = retrieved_point
+            .payload
+            .get(&self.content_payload_key)
+            .ok_or::<QdrantError<E::Error>>(
+                ConversionError::PayloadKeyNotFound {
+                    payload_key: self.content_payload_key.clone(),
+                    point_id: retrieved_point.id.clone(),
+                }
+                .into(),
+            )?
+            .kind
+            .clone()
+            .ok_or::<QdrantError<E::Error>>(
+                ConversionError::InvalidPageContent {
+                    point_id: retrieved_point.id.clone(),
+                }
+                .into(),
+            )?;
+        if let Kind::StringValue(page_content) = page_content {
+            Ok(Document {
+                page_content,
+                metadata,
+            })
+        } else {
+            Err(ConversionError::InvalidPageContent {
+                point_id: retrieved_point.id,
             }
             .into())
         }
