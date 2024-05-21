@@ -394,6 +394,11 @@ pub enum Opt {
     User(String),
     /// The type of the model.
     ModelType(String),
+
+    // Disable realtime online search fro llm-chain-ernie
+    DisableSearch(bool),
+    // Enable return citation info for llm-chain-ernie
+    EnableCitation(bool),
 }
 
 // Helper function to extract environment variables
