@@ -8,9 +8,9 @@ use crate::step::Step;
 use crate::{traits, Parameters};
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
+use text_splitter::TextSplitter;
 use thiserror::Error;
 use tiktoken_rs::cl100k_base;
-use text_splitter::TextSplitter;
 
 /// Custom error type for handling prompt token-related errors.
 #[derive(Clone, Debug, Error)]
@@ -27,7 +27,6 @@ pub enum PromptTokensError {
     #[error("Tokenizer error: {0}")]
     TokenizerError(#[from] crate::tokens::TokenizerError),
 }
-
 
 /// An extension trait for the `Executor` trait that provides additional methods for working
 /// with token counts.
@@ -59,23 +58,24 @@ pub trait ExecutorTokenCountExt: traits::Executor {
         let prompt = step.format(&base_parameters.combine(&Parameters::new_with_text("")))?;
         let tokens_used = self.tokens_used(step.options(), &prompt)?;
 
-        //FIX: ERROR："FormatAndExecuteError: Error executing: 
-        //     Unable to run model: invalid_request_error: 
+        //FIX: ERROR："FormatAndExecuteError: Error executing:
+        //     Unable to run model: invalid_request_error:
         //     This model's maximum context length is 16385 tokens. However, your messages resulted in 18385... tokens. Please reduce the length of the messages."
-        let mut max_chunk_token =  tokens_used.max_tokens as usize - tokens_used.tokens_used as usize;
+        let mut max_chunk_token =
+            tokens_used.max_tokens as usize - tokens_used.tokens_used as usize;
         if max_chunk_token > 4096 {
             max_chunk_token = 4096
         };
-        let chunk_overlap = if max_chunk_token > 4096 { chunk_overlap.unwrap_or(200) } else { chunk_overlap.unwrap_or(0)};
-        
+        let chunk_overlap = if max_chunk_token > 4096 {
+            chunk_overlap.unwrap_or(200)
+        } else {
+            chunk_overlap.unwrap_or(0)
+        };
+
         let mut origin_split_vec = splitter
-        .split_text(
-            &text,
-            max_chunk_token,
-            chunk_overlap,
-        )
-        .map_err(|_e| PromptTokensError::UnableToCompute)?;
-    
+            .split_text(&text, max_chunk_token, chunk_overlap)
+            .map_err(|_e| PromptTokensError::UnableToCompute)?;
+
         let mut split_vec = vec![];
         // better spliter
         let length = origin_split_vec.len();
@@ -192,14 +192,22 @@ pub trait Tokenizer {
     ) -> Result<Vec<String>, TokenizerError> {
         let tokenizer = cl100k_base().unwrap();
         let splitter = TextSplitter::new(tokenizer).with_trim_chunks(false);
-        let tokens = splitter.chunks(doc, 1).map(|chunk| chunk.to_string()).collect::<Vec<_>>();
-        
+        let tokens = splitter
+            .chunks(doc, 1)
+            .map(|chunk| chunk.to_string())
+            .collect::<Vec<_>>();
+
         let step_size = max(
             max_tokens_per_chunk.checked_sub(chunk_overlap).unwrap_or(1),
             1,
         );
 
-        log::info!("llm-chain split_text max_tokens_per_chunk = {},step ={}, tokens.len = {}",max_tokens_per_chunk,step_size,tokens.len());
+        log::info!(
+            "llm-chain split_text max_tokens_per_chunk = {},step ={}, tokens.len = {}",
+            max_tokens_per_chunk,
+            step_size,
+            tokens.len()
+        );
         debug_assert_ne!(step_size, 0);
 
         (0..tokens.len())
@@ -207,11 +215,11 @@ pub trait Tokenizer {
             .map(|start_idx| {
                 let end_idx = usize::min(start_idx + max_tokens_per_chunk, tokens.len());
                 let combined_string: String = tokens
-                .clone()
-                .into_iter()
-                .skip(start_idx)
-                .take(end_idx - start_idx + 1)
-                .collect();
+                    .clone()
+                    .into_iter()
+                    .skip(start_idx)
+                    .take(end_idx - start_idx + 1)
+                    .collect();
                 Ok(combined_string)
             })
             .collect()
@@ -331,7 +339,6 @@ impl From<Vec<usize>> for TokenCollection {
     }
 }
 
-
 fn remove_last_match(text: &str, pattern: &str) -> String {
     if let Some(index) = text.rfind(pattern) {
         let removed = text[..index].to_owned();
@@ -355,52 +362,54 @@ fn truncate_text_rev(text: &str) -> String {
     let mut char_count = 0;
     let mut found_period = false;
     if text.len() < 50 {
-        return text.to_string()
+        return text.to_string();
     } else {
         for c in text.chars().rev() {
-            if  c == '。'
-              || c == '，'
-              || c == '?'
-              || c == '？'
-              || c == '!'
-              || c == '！'
-              || c == ';'
-              || c == '；'
-              || c == ')'
-              || c == '）'
-              || c == ']'
-              || c == '】'
-              || c == '}' {
+            if c == '。'
+                || c == '，'
+                || c == '?'
+                || c == '？'
+                || c == '!'
+                || c == '！'
+                || c == ';'
+                || c == '；'
+                || c == ')'
+                || c == '）'
+                || c == ']'
+                || c == '】'
+                || c == '}'
+            {
                 found_period = true;
                 break;
             }
-    
+
             truncated.insert(0, c);
             char_count += 1;
-    
+
             if char_count >= 50 {
                 break;
             }
         }
-    
+
         if found_period {
-            let last_period_index = truncated.rfind('。')
-            .or(truncated.rfind('，'))
-            .or(truncated.rfind('?'))
-            .or(truncated.rfind('？'))
-            .or(truncated.rfind('!'))
-            .or(truncated.rfind('！'))
-            .or(truncated.rfind(';'))
-            .or(truncated.rfind('；'))
-            .or(truncated.rfind(')'))
-            .or(truncated.rfind('）'))
-            .or(truncated.rfind(']'))
-            .or(truncated.rfind('】'))
-            .or(truncated.rfind('}'))
-            .unwrap_or(truncated.len());
+            let last_period_index = truncated
+                .rfind('。')
+                .or(truncated.rfind('，'))
+                .or(truncated.rfind('?'))
+                .or(truncated.rfind('？'))
+                .or(truncated.rfind('!'))
+                .or(truncated.rfind('！'))
+                .or(truncated.rfind(';'))
+                .or(truncated.rfind('；'))
+                .or(truncated.rfind(')'))
+                .or(truncated.rfind('）'))
+                .or(truncated.rfind(']'))
+                .or(truncated.rfind('】'))
+                .or(truncated.rfind('}'))
+                .unwrap_or(truncated.len());
             truncated.truncate(last_period_index + 1);
             let need_truncated = truncated.chars().collect::<String>();
-            remove_last_match(text,&need_truncated)
+            remove_last_match(text, &need_truncated)
         } else {
             text.to_string()
         }
@@ -413,38 +422,39 @@ fn truncate_text_forward(text: &str) -> String {
     let mut found_period = false;
 
     if text.len() < 50 {
-        return text.to_string()
+        return text.to_string();
     } else {
         for c in text.chars() {
             if c == '。'
-            || c == '，'
-            || c == '?'
-            || c == '？'
-            || c == '!'
-            || c == '！'
-            || c == ';'
-            || c == '；'
-            || c == '('
-            || c == '（'
-            || c == '['
-            || c == '【'
-            || c == '{' {
-              found_period = true;
-              break;
-          }
+                || c == '，'
+                || c == '?'
+                || c == '？'
+                || c == '!'
+                || c == '！'
+                || c == ';'
+                || c == '；'
+                || c == '('
+                || c == '（'
+                || c == '['
+                || c == '【'
+                || c == '{'
+            {
+                found_period = true;
+                break;
+            }
             truncated.insert(0, c);
             char_count += 1;
-    
+
             if char_count >= 50 {
                 println!("char_count>50");
                 break;
             }
         }
-    
+
         if found_period {
             let trim_truncated = truncated.chars().rev().collect::<String>();
             // println!("trim_truncated = {}",trim_truncated);
-            remove_first_match(text,&trim_truncated)
+            remove_first_match(text, &trim_truncated)
         } else {
             text.to_string()
         }
@@ -461,42 +471,44 @@ fn truncate_en_text_rev(text: &str) -> String {
     let mut char_count = 0;
     let mut found_period = false;
     if text.len() < 50 {
-        return text.to_string()
+        return text.to_string();
     } else {
         for c in text.chars().rev() {
-            if  c == '.'
-              || c == ','
-              || c == '?'
-              || c == '!'
-              || c == ';'
-              || c == ')'
-              || c == ']'
-              || c == '}' {
+            if c == '.'
+                || c == ','
+                || c == '?'
+                || c == '!'
+                || c == ';'
+                || c == ')'
+                || c == ']'
+                || c == '}'
+            {
                 found_period = true;
                 break;
             }
-    
+
             truncated.insert(0, c);
             char_count += 1;
-    
+
             if char_count >= 50 {
                 break;
             }
         }
-    
+
         if found_period {
-            let last_period_index = truncated.rfind('.')
-            .or(truncated.rfind(','))
-            .or(truncated.rfind('?'))
-            .or(truncated.rfind('!'))
-            .or(truncated.rfind(';'))
-            .or(truncated.rfind(')'))
-            .or(truncated.rfind(']'))
-            .or(truncated.rfind('}'))
-            .unwrap_or(truncated.len());
+            let last_period_index = truncated
+                .rfind('.')
+                .or(truncated.rfind(','))
+                .or(truncated.rfind('?'))
+                .or(truncated.rfind('!'))
+                .or(truncated.rfind(';'))
+                .or(truncated.rfind(')'))
+                .or(truncated.rfind(']'))
+                .or(truncated.rfind('}'))
+                .unwrap_or(truncated.len());
             truncated.truncate(last_period_index + 1);
             let need_truncated = truncated.chars().collect::<String>();
-            remove_last_match(text,&need_truncated)
+            remove_last_match(text, &need_truncated)
         } else {
             text.to_string()
         }
@@ -509,33 +521,34 @@ fn truncate_en_text_forward(text: &str) -> String {
     let mut found_period = false;
 
     if text.len() < 50 {
-        return text.to_string()
+        return text.to_string();
     } else {
         for c in text.chars() {
             if c == '.'
-            || c == ','
-            || c == '?'
-            || c == '!'
-            || c == ';'
-            || c == '('
-            || c == '['
-            || c == '{' {
-              found_period = true;
-              break;
-          }
+                || c == ','
+                || c == '?'
+                || c == '!'
+                || c == ';'
+                || c == '('
+                || c == '['
+                || c == '{'
+            {
+                found_period = true;
+                break;
+            }
             truncated.insert(0, c);
             char_count += 1;
-    
+
             if char_count >= 50 {
                 println!("char_count>50");
                 break;
             }
         }
-    
+
         if found_period {
             let trim_truncated = truncated.chars().rev().collect::<String>();
             // println!("trim_truncated = {}",trim_truncated);
-            remove_first_match(text,&trim_truncated)
+            remove_first_match(text, &trim_truncated)
         } else {
             text.to_string()
         }

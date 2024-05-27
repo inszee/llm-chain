@@ -2,7 +2,7 @@
 //!
 //! This schema is used to store documents in vector stores. It is used to store the document's content and metadata.
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct Document<M = EmptyMetadata>
 where
     M: serde::Serialize + serde::de::DeserializeOwned,

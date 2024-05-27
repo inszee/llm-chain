@@ -108,30 +108,26 @@ impl traits::Executor for Executor {
         if opts.is_streaming() {
             sleep(Duration::from_millis(1000)).await;
             match async move { client.chat().create_stream(input).await }.await {
-                Ok(client_normal) => {
-                    Ok(stream_to_output(client_normal))
-                }
+                Ok(client_normal) => Ok(stream_to_output(client_normal)),
                 Err(err) => {
                     log::error!("llm-chain execute create_stream error = {},retry ", err);
                     sleep(Duration::from_millis(1000)).await;
                     let res = async move { retry_client.chat().create_stream(retry_input).await }
-                    .await
-                    .map_err(|e| ExecutorError::InnerError(e.into()))?;
+                        .await
+                        .map_err(|e| ExecutorError::InnerError(e.into()))?;
                     Ok(stream_to_output(res))
                 }
             }
         } else {
             sleep(Duration::from_millis(1000)).await;
             match async move { client.chat().create(input).await }.await {
-                Ok(client_normal) => {
-                    Ok(completion_to_output(client_normal))
-                }
+                Ok(client_normal) => Ok(completion_to_output(client_normal)),
                 Err(err) => {
                     log::error!("llm-chain execute create error = {},retry ", err);
                     sleep(Duration::from_millis(1000)).await;
                     let res = async move { retry_client.chat().create(retry_input).await }
-                    .await
-                    .map_err(|e| ExecutorError::InnerError(e.into()))?;
+                        .await
+                        .map_err(|e| ExecutorError::InnerError(e.into()))?;
 
                     let output = completion_to_output(res);
                     Ok(output)
