@@ -2,14 +2,14 @@ use async_trait::async_trait;
 use erniebot_rs::embedding::{EmbeddingEndpoint, EmbeddingModel};
 use erniebot_rs::errors::ErnieError;
 use llm_chain::traits::{self, EmbeddingsError};
-use std::sync::Arc;
+use std::sync::{atomic, Arc};
 use thiserror::Error;
 
 pub struct Embeddings {
     client: Arc<EmbeddingEndpoint>,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug,Clone, Error)]
 #[error(transparent)]
 pub enum ErnieEmbeddingsError {
     #[error(transparent)]
@@ -42,31 +42,62 @@ impl traits::Embeddings for Embeddings {
 
     async fn embed_query(&self, query: String) -> Result<Vec<f32>, Self::Error> {
         let texts = vec![query];
-        let results: Result<Vec<Vec<f32>>, Self::Error> = self
-            .client
-            .ainvoke(&texts, None)
-            .await
-            .map(|r| {
-                r.get_embedding_results()
-                    .unwrap_or(vec![])
-                    .iter()
-                    .map(|item| item.iter().map(|f| *f as f32).collect())
-                    .collect()
-            })
-            .map_err(|e: ErnieError| e.into());
-        match results {
-            Ok(vecs) => {
-                if vecs.len() > 0 {
-                    println!("embed_query vec.len()={}",vecs.len());
-                    Ok(vecs.get(0).unwrap().to_vec())
-                } else {
-                    println!("embed_query vec emtpy!");
-                    Ok(vec![])
+        let mut retry = false;
+        let mut results: Result<Vec<Vec<f32>>, Self::Error>;
+        
+        loop {
+            results = self
+                .client
+                .ainvoke(&texts, None)
+                .await
+                .map(|r| {
+                    r.get_embedding_results()
+                        .unwrap_or(vec![])
+                        .iter()
+                        .map(|item| item.iter().map(|f| *f as f32).collect())
+                        .collect()
+                })
+                .map_err(|e: ErnieError| e.into());
+            
+            match &results {
+                Ok(vecs) if vecs.is_empty() => {
+                    println!("embed_query vec empty!");
+                    return Ok(vec![]);
+                }
+                Ok(vecs) => {
+                    println!("embed_query vec.len()={}", vecs.len());
+                    return Ok(vecs[0].to_vec());
+                }
+                Err(err) => {
+                    match err {
+                        ErnieEmbeddingsError::Client(ernie_error) => {
+                            match ernie_error {
+                                ErnieError::RemoteAPIError(remote_api_err) => {
+                                    if remote_api_err.contains(r#"Open api qps request limit reached"#){
+                                        retry = true;
+                                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                                    } else {
+                                        return Err(err.clone())
+                                    }
+                                },
+                                _ => {return Err(err.clone())}
+                            }
+                        },
+                        _ => {return Err(err.clone())}
+                    }
                 }
             }
-            Err(err) => std::result::Result::Err(err),
+            
+            if !retry {
+                break;
+            }
+            
+            retry = false;
         }
+        
+        unreachable!();
     }
+    
 }
 
 impl Default for Embeddings {
