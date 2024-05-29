@@ -25,17 +25,19 @@ impl traits::Embeddings for Embeddings {
     type Error = ErnieEmbeddingsError;
 
     async fn embed_texts(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>, Self::Error> {
-        self.client
-            .ainvoke(&texts, None)
-            .await
-            .map(|r| {
-                r.get_embedding_results()
-                    .unwrap_or(vec![])
-                    .iter()
-                    .map(|item| item.iter().map(|f| *f as f32).collect())
-                    .collect()
-            })
-            .map_err(|e| e.into())
+        let mut embeding_results = vec![];
+        for text in texts {
+            match self.embed_query(text).await {
+                Ok(f32vec) => {
+                    println!("embed_texts embed_query success!");
+                    embeding_results.push(f32vec);
+                }
+                Err(err) => {
+                    println!("embed_texts embed_query error{}!",err);
+                }
+            }
+        }
+        Ok(embeding_results)
     }
 
     async fn embed_query(&self, query: String) -> Result<Vec<f32>, Self::Error> {
@@ -51,12 +53,14 @@ impl traits::Embeddings for Embeddings {
                     .map(|item| item.iter().map(|f| *f as f32).collect())
                     .collect()
             })
-            .map_err(|e| e.into());
+            .map_err(|e: ErnieError| e.into());
         match results {
             Ok(vecs) => {
                 if vecs.len() > 0 {
+                    println!("embed_query vec.len()={}",vecs.len());
                     Ok(vecs.get(0).unwrap().to_vec())
                 } else {
+                    println!("embed_query vec emtpy!");
                     Ok(vec![])
                 }
             }
