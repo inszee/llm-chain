@@ -22,4 +22,5 @@ strum = "0.26.2"
 strum_macros = "0.26.2"
 tokio = { version = "1.28.0", features = ["rt-multi-thread"] }
 tokio-stream = "0.1.14"
+log = "0.4.14"
 thiserror.workspace = true

@@ -29,11 +29,11 @@ impl traits::Embeddings for Embeddings {
         for text in texts {
             match self.embed_query(text).await {
                 Ok(f32vec) => {
-                    println!("embed_texts embed_query success!");
+                    log::debug!("embed_texts embed_query success! vec = {:?}",f32vec);
                     embeding_results.push(f32vec);
                 }
                 Err(err) => {
-                    println!("embed_texts embed_query error{}!",err);
+                    log::debug!("embed_texts embed_query error{}!",err);
                 }
             }
         }
@@ -61,11 +61,11 @@ impl traits::Embeddings for Embeddings {
             
             match &results {
                 Ok(vecs) if vecs.is_empty() => {
-                    println!("embed_query vec empty!");
+                    log::debug!("embed_query vec empty!");
                     return Ok(vec![]);
                 }
                 Ok(vecs) => {
-                    println!("embed_query vec.len()={}", vecs.len());
+                    log::debug!("embed_query vec.len()={}", vecs.len());
                     return Ok(vecs[0].to_vec());
                 }
                 Err(err) => {
@@ -89,6 +89,7 @@ impl traits::Embeddings for Embeddings {
             }
             
             if !retry {
+                log::debug!("embed_query break loop");
                 break;
             }
             
